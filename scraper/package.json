@@ -1,10 +1,10 @@
 {
-  "name": "aquawatch-ph-scraper",
-  "private": true,
-  "type": "commonjs",
+  "name": "aquawatch-scraper",
+  "version": "1.0.0",
+  "main": "index.js",
   "dependencies": {
-    "axios": "^1.9.0",
+    "axios": "^1.6.0",
     "cheerio": "^1.0.0",
-    "firebase-admin": "^13.2.0"
+    "firebase-admin": "^12.0.0"
   }
 }
