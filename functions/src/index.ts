@@ -1,67 +1,34 @@
 import * as admin from 'firebase-admin'
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import { checkDeadlines } from './notifyDeadlines'
-import { sendDiscord } from './sendDiscord'
+import { runCheckNotifications } from './checkNotifications'
+import { runSendDailyDigest } from './sendDailyDigest'
+import { handleTelegramWebhook } from './telegramWebhook'
 
 admin.initializeApp()
 
-export const checkDeadlinesScheduled = onSchedule('every 5 minutes', async () => {
-  await checkDeadlines()
-})
+export const checkNotifications = onSchedule(
+  {
+    schedule: '*/5 * * * *',
+    timeZone: 'UTC',
+  },
+  async () => {
+    await runCheckNotifications()
+  },
+)
+
+export const sendDailyDigest = onSchedule(
+  {
+    schedule: '0 1 * * *',
+    timeZone: 'UTC',
+  },
+  async () => {
+    await runSendDailyDigest()
+  },
+)
 
 export const telegramWebhook = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method not allowed')
-    return
-  }
-
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  if (!token) {
-    res.status(500).send('Bot token not configured')
-    return
-  }
-
-  const update = req.body
-  const message = update?.message
-  const text: string = message?.text ?? ''
-  const chatId = message?.chat?.id
-
-  if (!text.startsWith('/start ') || !chatId) {
-    res.status(200).json({ ok: true })
-    return
-  }
-
-  const code = text.replace('/start ', '').trim()
-  const db = admin.firestore()
-
-  const usersSnap = await db
-    .collection('users')
-    .where('telegramLinkCode', '==', code)
-    .limit(1)
-    .get()
-
-  let reply: string
-
-  if (usersSnap.empty) {
-    reply =
-      '❌ Invalid or expired code. Please generate a new one from the dashboard.'
-  } else {
-    const userDoc = usersSnap.docs[0]
-    await userDoc.ref.update({
-      telegramChatId: String(chatId),
-      telegramLinkCode: null,
-    })
-    reply = '✅ Your Telegram is now linked to AquaWatch PH!'
-  }
-
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: reply }),
-  })
-
-  res.status(200).json({ ok: true })
+  await handleTelegramWebhook(req, res)
 })
 
 export const testDiscordWebhook = onCall(async (request) => {
@@ -70,18 +37,29 @@ export const testDiscordWebhook = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'webhookUrl is required')
   }
 
+  const embed = {
+    title: '✅ AquaWatch PH',
+    description:
+      'Discord connection verified! You will receive notifications here.',
+    color: 0x00cc66,
+  }
+
   try {
-    await sendDiscord(
-      webhookUrl,
-      {
-        title: 'Test Notification',
-        description: 'Your Discord webhook is working correctly.',
-        dueAt: { toDate: () => new Date() },
-      },
-      request.auth?.token?.name ?? 'AquaWatch PH User',
-    )
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new HttpsError(
+        'internal',
+        `Discord webhook error: ${res.status} ${text}`,
+      )
+    }
     return { success: true }
   } catch (err) {
+    if (err instanceof HttpsError) throw err
     throw new HttpsError(
       'internal',
       err instanceof Error ? err.message : 'Webhook test failed',
