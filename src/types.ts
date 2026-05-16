@@ -16,16 +16,19 @@ export interface WaterData {
 
 export type NotifyChannel = 'telegram' | 'discord'
 
-export interface Deadline {
+export type EventKind = 'deadline' | 'meeting' | 'business_trip'
+
+/** Document shape in the `events` Firestore collection */
+export interface ScheduledEvent {
   id: string
   userId: string
+  eventKind: EventKind
   title: string
   description: string
-  dueAt: Timestamp
-  notifyAt: Timestamp
+  scheduledAt: Timestamp
   notifyVia: NotifyChannel[]
-  notifyMinutesBefore: number
-  isNotified: boolean
+  notificationsSent: string[]
+  isCompleted: boolean
   createdAt: Timestamp
 }
 

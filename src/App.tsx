@@ -3,7 +3,7 @@ import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastProvider } from './hooks/useToast'
 import { Dashboard } from './pages/Dashboard'
-import { Deadlines } from './pages/Deadlines'
+import { Schedule } from './pages/Schedule'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
 import { useAuth } from './hooks/useAuth'
@@ -23,11 +23,12 @@ export default function App() {
           <Route path="/login" element={<LoginRedirect />} />
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/deadlines" element={<Navigate to="/schedule" replace />} />
             <Route
-              path="/deadlines"
+              path="/schedule"
               element={
                 <ProtectedRoute>
-                  <Deadlines />
+                  <Schedule />
                 </ProtectedRoute>
               }
             />

@@ -3,28 +3,26 @@ import { Calendar, Clock, Trash2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../hooks/useAuth'
 import {
-  createDeadline,
-  deleteDeadline,
-  subscribeUserDeadlines,
+  createEvent,
+  deleteEvent,
+  subscribeUserEvents,
 } from '../lib/firestore'
 import { Skeleton } from '../components/Skeleton'
-import type { Deadline, NotifyChannel } from '../types'
+import type { EventKind, NotifyChannel, ScheduledEvent } from '../types'
 
-const NOTIFY_OPTIONS = [
-  { value: 15, label: '15 minutes' },
-  { value: 30, label: '30 minutes' },
-  { value: 60, label: '1 hour' },
-  { value: 120, label: '2 hours' },
-  { value: 1440, label: '24 hours' },
+const EVENT_KIND_OPTIONS: { value: EventKind; label: string }[] = [
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'business_trip', label: 'Business trip' },
 ]
 
-function useCountdown(dueAt: Timestamp) {
+function useCountdown(scheduledAt: Timestamp) {
   const [remaining, setRemaining] = useState('')
 
   useEffect(() => {
     const tick = () => {
-      const due = dueAt.toDate().getTime()
-      const diff = due - Date.now()
+      const target = scheduledAt.toDate().getTime()
+      const diff = target - Date.now()
       if (diff <= 0) {
         setRemaining('Overdue')
         return
@@ -41,23 +39,30 @@ function useCountdown(dueAt: Timestamp) {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [dueAt])
+  }, [scheduledAt])
 
   return remaining
 }
 
-function StatusBadge({ deadline }: { deadline: Deadline }) {
+function StatusBadge({ event }: { event: ScheduledEvent }) {
   const now = Date.now()
-  const due = deadline.dueAt.toDate().getTime()
+  const at = event.scheduledAt.toDate().getTime()
 
-  if (deadline.isNotified) {
+  if (event.isCompleted) {
+    return (
+      <span className="rounded-full bg-slate-700/80 px-2 py-0.5 text-xs text-slate-300">
+        Completed
+      </span>
+    )
+  }
+  if ((event.notificationsSent?.length ?? 0) > 0) {
     return (
       <span className="rounded-full bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
         Notified
       </span>
     )
   }
-  if (due < now) {
+  if (at < now) {
     return (
       <span className="rounded-full bg-red-900/50 px-2 py-0.5 text-xs text-red-400">
         Overdue
@@ -71,14 +76,14 @@ function StatusBadge({ deadline }: { deadline: Deadline }) {
   )
 }
 
-function DeadlineCard({
-  deadline,
+function EventCard({
+  event,
   onDelete,
 }: {
-  deadline: Deadline
+  event: ScheduledEvent
   onDelete: (id: string) => void
 }) {
-  const countdown = useCountdown(deadline.dueAt)
+  const countdown = useCountdown(event.scheduledAt)
   const [confirming, setConfirming] = useState(false)
 
   const handleDelete = () => {
@@ -86,29 +91,41 @@ function DeadlineCard({
       setConfirming(true)
       return
     }
-    onDelete(deadline.id)
+    onDelete(event.id)
     setConfirming(false)
   }
 
+  const kindLabel =
+    EVENT_KIND_OPTIONS.find((o) => o.value === event.eventKind)?.label ??
+    event.eventKind
+
   return (
     <article className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <h3 className="font-semibold text-white">{deadline.title}</h3>
-        <StatusBadge deadline={deadline} />
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-white">{event.title}</h3>
+          <span className="text-xs uppercase tracking-wide text-slate-500">
+            {kindLabel}
+          </span>
+        </div>
+        <StatusBadge event={event} />
       </div>
-      {deadline.description && (
-        <p className="mb-3 text-sm text-slate-400">{deadline.description}</p>
+      {event.description && (
+        <p className="mb-3 text-sm text-slate-400">{event.description}</p>
       )}
       <div className="mb-2 flex items-center gap-2 text-sm text-slate-300">
         <Calendar size={14} />
-        {deadline.dueAt.toDate().toLocaleString()}
+        {event.scheduledAt.toDate().toLocaleString()}
       </div>
-      <div className="mb-3 flex items-center gap-2 font-mono text-cyan" style={{ color: '#00d4ff' }}>
+      <div
+        className="mb-3 flex items-center gap-2 font-mono text-cyan"
+        style={{ color: '#00d4ff' }}
+      >
         <Clock size={14} />
         {countdown}
       </div>
       <div className="mb-3 flex flex-wrap gap-1">
-        {deadline.notifyVia.map((ch) => (
+        {event.notifyVia.map((ch) => (
           <span
             key={ch}
             className="rounded bg-slate-800 px-2 py-0.5 text-xs capitalize text-slate-300"
@@ -131,32 +148,32 @@ function DeadlineCard({
   )
 }
 
-function EmptyDeadlines() {
+function EmptySchedule() {
   return (
     <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-700 py-16 text-center">
       <Calendar className="mb-4 text-slate-600" size={56} />
-      <p className="text-lg text-slate-300">No deadlines yet</p>
-      <p className="mt-1 text-sm text-slate-500">Create your first reminder above</p>
+      <p className="text-lg text-slate-300">No events yet</p>
+      <p className="mt-1 text-sm text-slate-500">Create your first event above</p>
     </div>
   )
 }
 
-export function Deadlines() {
+export function Schedule() {
   const { user } = useAuth()
-  const [deadlines, setDeadlines] = useState<Deadline[]>([])
+  const [events, setEvents] = useState<ScheduledEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [dueAt, setDueAt] = useState('')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [eventKind, setEventKind] = useState<EventKind>('deadline')
   const [notifyVia, setNotifyVia] = useState<NotifyChannel[]>([])
-  const [notifyMinutesBefore, setNotifyMinutesBefore] = useState(30)
 
   useEffect(() => {
     if (!user) return
-    const unsub = subscribeUserDeadlines(user.uid, (items) => {
-      setDeadlines(items)
+    const unsub = subscribeUserEvents(user.uid, (items) => {
+      setEvents(items)
       setLoading(false)
     })
     return unsub
@@ -170,20 +187,21 @@ export function Deadlines() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !title || !dueAt) return
+    if (!user || !title || !scheduledAt) return
     setSubmitting(true)
     try {
-      await createDeadline({
+      await createEvent({
         userId: user.uid,
+        eventKind,
         title,
         description,
-        dueAt: new Date(dueAt),
+        scheduledAt: new Date(scheduledAt),
         notifyVia,
-        notifyMinutesBefore,
       })
       setTitle('')
       setDescription('')
-      setDueAt('')
+      setScheduledAt('')
+      setEventKind('deadline')
       setNotifyVia([])
     } finally {
       setSubmitting(false)
@@ -191,21 +209,23 @@ export function Deadlines() {
   }
 
   const handleDelete = async (id: string) => {
-    await deleteDeadline(id)
+    await deleteEvent(id)
   }
 
   return (
     <div>
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-white md:text-3xl">Deadlines</h1>
-        <p className="mt-1 text-slate-400">Manage your personal reminder notifications</p>
+        <h1 className="text-2xl font-bold text-white md:text-3xl">Schedule</h1>
+        <p className="mt-1 text-slate-400">
+          Deadlines, meetings, and trips — synced with Cloud Notifications
+        </p>
       </header>
 
       <form
         onSubmit={handleSubmit}
         className="mb-10 rounded-xl border border-slate-800 bg-slate-900/50 p-6"
       >
-        <h2 className="mb-4 text-lg font-semibold text-white">New deadline</h2>
+        <h2 className="mb-4 text-lg font-semibold text-white">New event</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-sm text-slate-400">Title</span>
@@ -227,28 +247,30 @@ export function Deadlines() {
             />
           </label>
           <label>
-            <span className="mb-1 block text-sm text-slate-400">Due date & time</span>
-            <input
-              type="datetime-local"
-              required
-              value={dueAt}
-              onChange={(e) => setDueAt(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white outline-none focus:border-cyan"
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-sm text-slate-400">Notify before</span>
+            <span className="mb-1 block text-sm text-slate-400">Event type</span>
             <select
-              value={notifyMinutesBefore}
-              onChange={(e) => setNotifyMinutesBefore(Number(e.target.value))}
+              value={eventKind}
+              onChange={(e) => setEventKind(e.target.value as EventKind)}
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white outline-none focus:border-cyan"
             >
-              {NOTIFY_OPTIONS.map((o) => (
+              {EVENT_KIND_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm text-slate-400">
+              Date &amp; time
+            </span>
+            <input
+              type="datetime-local"
+              required
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white outline-none focus:border-cyan"
+            />
           </label>
           <fieldset className="sm:col-span-2">
             <legend className="mb-2 text-sm text-slate-400">Notify me via</legend>
@@ -273,23 +295,23 @@ export function Deadlines() {
           className="mt-4 rounded-lg bg-cyan px-6 py-2 font-medium text-navy transition hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: '#00d4ff', color: '#0a0f1e' }}
         >
-          {submitting ? 'Saving…' : 'Create deadline'}
+          {submitting ? 'Saving…' : 'Create event'}
         </button>
       </form>
 
-      <h2 className="mb-4 text-lg font-semibold text-white">Your deadlines</h2>
+      <h2 className="mb-4 text-lg font-semibold text-white">Your events</h2>
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {[1, 2].map((n) => (
             <Skeleton key={n} className="h-36" />
           ))}
         </div>
-      ) : deadlines.length === 0 ? (
-        <EmptyDeadlines />
+      ) : events.length === 0 ? (
+        <EmptySchedule />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {deadlines.map((d) => (
-            <DeadlineCard key={d.id} deadline={d} onDelete={handleDelete} />
+          {events.map((ev) => (
+            <EventCard key={ev.id} event={ev} onDelete={handleDelete} />
           ))}
         </div>
       )}

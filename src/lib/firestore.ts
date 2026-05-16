@@ -16,7 +16,13 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from './firebase'
-import type { Deadline, NotifyChannel, UserProfile, WaterData } from '../types'
+import type {
+  EventKind,
+  NotifyChannel,
+  ScheduledEvent,
+  UserProfile,
+  WaterData,
+} from '../types'
 
 export const MOCK_WATER_DATA: WaterData[] = [
   {
@@ -108,49 +114,48 @@ export async function ensureUserProfile(
   }
 }
 
-export async function createDeadline(input: {
+export async function createEvent(input: {
   userId: string
+  eventKind: EventKind
   title: string
   description: string
-  dueAt: Date
+  scheduledAt: Date
   notifyVia: NotifyChannel[]
-  notifyMinutesBefore: number
 }): Promise<void> {
-  const notifyAt = new Date(input.dueAt.getTime() - input.notifyMinutesBefore * 60 * 1000)
-  await addDoc(collection(db, 'deadlines'), {
+  await addDoc(collection(db, 'events'), {
     userId: input.userId,
+    eventKind: input.eventKind,
     title: input.title,
     description: input.description,
-    dueAt: Timestamp.fromDate(input.dueAt),
-    notifyAt: Timestamp.fromDate(notifyAt),
+    scheduledAt: Timestamp.fromDate(input.scheduledAt),
     notifyVia: input.notifyVia,
-    notifyMinutesBefore: input.notifyMinutesBefore,
-    isNotified: false,
+    notificationsSent: [],
+    isCompleted: false,
     createdAt: serverTimestamp(),
   })
 }
 
-export function subscribeUserDeadlines(
+export function subscribeUserEvents(
   userId: string,
-  onData: (items: Deadline[]) => void,
+  onData: (items: ScheduledEvent[]) => void,
 ): Unsubscribe {
   const q = query(
-    collection(db, 'deadlines'),
+    collection(db, 'events'),
     where('userId', '==', userId),
-    orderBy('dueAt', 'asc'),
+    orderBy('scheduledAt', 'asc'),
   )
   return onSnapshot(q, (snapshot) => {
     onData(
       snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data(),
-      })) as Deadline[],
+      })) as ScheduledEvent[],
     )
   })
 }
 
-export async function deleteDeadline(id: string): Promise<void> {
-  await deleteDoc(doc(db, 'deadlines', id))
+export async function deleteEvent(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'events', id))
 }
 
 export async function setTelegramLinkCode(uid: string, code: string): Promise<void> {

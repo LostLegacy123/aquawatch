@@ -6,7 +6,7 @@ import { ToastContainer } from './ToastContainer'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: Droplets },
-  { to: '/deadlines', label: 'Deadlines', icon: Calendar },
+  { to: '/schedule', label: 'Schedule', icon: Calendar },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
