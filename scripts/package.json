@@ -1,0 +1,9 @@
+{
+  "name": "aquawatch-scripts",
+  "version": "1.0.0",
+  "main": "checkNotifications.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}

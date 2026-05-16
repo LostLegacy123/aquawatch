@@ -27,6 +27,8 @@ dist-ssr
 functions/lib
 functions/node_modules
 scraper/node_modules
+scripts/node_modules
+api/node_modules
 *.tsbuildinfo
 
 # Defer GitHub Actions scraper until ready (avoids accidental scheduled runs on fork)
