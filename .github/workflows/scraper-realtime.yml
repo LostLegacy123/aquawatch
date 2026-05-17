@@ -1,0 +1,25 @@
+# Schedules are DISABLED until you enable them (see README.md).
+# Safe to commit and push: this workflow only runs when triggered manually from GitHub Actions.
+# Note: scraper/index.js does not implement --realtime yet; manual runs perform a full scrape.
+
+name: Hourly News Check (Near Real-time)
+
+on:
+  workflow_dispatch:
+  # Enable automatic hourly runs when ready:
+  # schedule:
+  #   - cron: '0 * * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: cd scraper && npm install
+      - name: Check for new articles
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scraper/index.js --realtime

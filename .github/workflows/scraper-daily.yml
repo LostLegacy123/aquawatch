@@ -1,0 +1,24 @@
+# Schedules are DISABLED until you enable them (see README.md).
+# Safe to commit and push: this workflow only runs when triggered manually from GitHub Actions.
+
+name: Daily News Scraper (9AM PHT)
+
+on:
+  workflow_dispatch:
+  # Enable automatic daily scrape at 9:00 AM PHT (1:00 AM UTC):
+  # schedule:
+  #   - cron: '0 1 * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: cd scraper && npm install
+      - name: Scrape all sources
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scraper/index.js

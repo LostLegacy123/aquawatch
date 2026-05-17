@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, MessageCircle, Send } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Bell, Check, MessageCircle, Send } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
   generateLinkCode,
@@ -81,8 +82,25 @@ export function Settings() {
     <div>
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-white md:text-3xl">Settings</h1>
-        <p className="mt-1 text-slate-400">Configure Telegram and Discord notifications</p>
+        <p className="mt-1 text-slate-400">
+          Connect your accounts for personal schedule reminders
+        </p>
       </header>
+
+      <div className="mb-6 rounded-xl border border-cyan/25 bg-cyan/5 p-4 text-sm text-slate-300">
+        <div className="mb-2 flex items-center gap-2 font-medium text-cyan" style={{ color: '#00d4ff' }}>
+          <Bell size={18} />
+          Personal reminders
+        </div>
+        <p>
+          Events you create on{' '}
+          <Link to="/schedule" className="text-cyan underline" style={{ color: '#00d4ff' }}>
+            Schedule
+          </Link>{' '}
+          can notify you on Telegram and/or Discord. Link Telegram below and paste your own
+          Discord channel webhook — reminders go to you, not a shared server digest.
+        </p>
+      </div>
 
       {message && (
         <p className="mb-4 rounded-lg border border-cyan/30 bg-cyan/10 px-4 py-2 text-sm text-cyan">
@@ -106,6 +124,11 @@ export function Settings() {
             </span>
           )}
         </div>
+
+        <p className="mb-4 text-sm text-slate-400">
+          Personal event reminders are sent as direct messages from the bot after you link
+          your account. The bot username shown below comes from your app config.
+        </p>
 
         {!telegramLinked ? (
           <>
@@ -158,7 +181,13 @@ export function Settings() {
           )}
         </div>
 
-        <label className="mb-2 block text-sm text-slate-400">Webhook URL</label>
+        <p className="mb-4 text-sm text-slate-400">
+          Create a webhook in your Discord server (channel settings → Integrations →
+          Webhooks), then paste the URL here. This is your private channel — used only for
+          your schedule reminders, not the daily news digest.
+        </p>
+
+        <label className="mb-2 block text-sm text-slate-400">Your webhook URL</label>
         <input
           type="url"
           value={discordUrl}

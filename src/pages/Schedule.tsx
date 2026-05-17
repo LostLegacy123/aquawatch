@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Clock, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Bell, Calendar, Clock, Trash2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../hooks/useAuth'
 import {
@@ -221,6 +222,19 @@ export function Schedule() {
         </p>
       </header>
 
+      <div className="mb-6 flex flex-col gap-2 rounded-xl border border-slate-700 bg-slate-900/40 p-4 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2">
+          <Bell className="mt-0.5 shrink-0 text-cyan" style={{ color: '#00d4ff' }} size={18} />
+          <p>
+            Want personal reminders on Telegram or Discord? Connect them in{' '}
+            <Link to="/settings" className="font-medium underline" style={{ color: '#00d4ff' }}>
+              Settings
+            </Link>{' '}
+            first, then choose channels when you create an event below.
+          </p>
+        </div>
+      </div>
+
       <form
         onSubmit={handleSubmit}
         className="mb-10 rounded-xl border border-slate-800 bg-slate-900/50 p-6"
@@ -274,6 +288,9 @@ export function Schedule() {
           </label>
           <fieldset className="sm:col-span-2">
             <legend className="mb-2 text-sm text-slate-400">Notify me via</legend>
+            <p className="mb-2 text-xs text-slate-500">
+              Requires Telegram linked and/or Discord webhook saved in Settings.
+            </p>
             <div className="flex gap-4">
               {(['telegram', 'discord'] as NotifyChannel[]).map((ch) => (
                 <label key={ch} className="flex items-center gap-2 text-white capitalize">
