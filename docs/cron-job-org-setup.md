@@ -102,8 +102,4 @@ Turning off or deleting a cron-job.org job stops that workflow from running auto
 | Runs but no Telegram | Link Telegram in Settings; enable Telegram on event; check repo secrets |
 | cron-job.org job disabled | Fix URL/PAT; re-enable job after 25 failures |
 
----
 
-## Do we need the cron-job.org API?
-
-**No** for this setup. The web UI is enough. The cron-job.org API is only if you want to create jobs from code later.
