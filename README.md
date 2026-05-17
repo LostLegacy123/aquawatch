@@ -24,7 +24,7 @@ Real-time water and environmental news for the Philippines, plus personal schedu
 flowchart TB
   subgraph client ["React App — Firebase Hosting"]
     Login["Login — Google Auth"]
-    Dash["Dashboard — waterData + mocks"]
+    Dash["Dashboard — articles + waterData"]
     Sched["Schedule — events CRUD"]
     Set["Settings — Telegram code + Discord webhook"]
   end
@@ -154,8 +154,8 @@ Workflows use **`workflow_dispatch` only** in YAML (manual button or external tr
 | Workflow file | Purpose | Suggested cron-job.org schedule |
 |---------------|---------|--------------------------------|
 | `check-notifications.yml` | Personal reminders (Telegram/Discord) | Every **5 minutes** |
-| `scraper-daily.yml` | Scrape all sources → `articles` | Daily **9:00 AM** Asia/Manila |
-| `scraper-realtime.yml` | Full scrape (hourly check) | Every **hour** (optional) |
+| `scraper-daily.yml` | Scrape → `articles` + **9AM PHT group digest** (Telegram/Discord) | Daily **9:00 AM** Asia/Manila |
+| `scraper-realtime.yml` | Scrape + **share new** articles to group | Every **hour** (optional) |
 
 Turn **off** a cron-job.org job to stop that workflow. Scrapers do not use GitHub’s built-in `schedule` in the repo.
 
@@ -217,8 +217,8 @@ See [`.env.example`](.env.example).
 | `VITE_TELEGRAM_BOT_USERNAME` | Settings UI copy |
 | `FIREBASE_SERVICE_ACCOUNT` | GHA, scraper, Vercel, local scripts |
 | `TELEGRAM_BOT_TOKEN` | GHA, Vercel, Functions |
-| `TELEGRAM_GROUP_CHAT_ID` | Daily digest (Functions) |
-| `DISCORD_GROUP_WEBHOOK` | Daily digest (Functions) |
+| `TELEGRAM_GROUP_CHAT_ID` | Group news digest (Actions + optional Functions) |
+| `DISCORD_GROUP_WEBHOOK` | Group news digest (Actions + optional Functions) |
 
 ---
 

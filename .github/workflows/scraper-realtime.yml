@@ -1,5 +1,4 @@
-# Hourly news scrape — manual or cron-job.org dispatch only (no GitHub schedule).
-# Disable the cron-job.org job to stop automatic scrapes.
+# Hourly scrape + share new articles to group (rubric option c).
 
 name: Hourly News Check (Near Real-time)
 
@@ -24,3 +23,13 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node index.js
         working-directory: scraper
+      - run: npm install
+        working-directory: scripts
+      - name: Share new articles to group
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_GROUP_CHAT_ID: ${{ secrets.TELEGRAM_GROUP_CHAT_ID }}
+          DISCORD_GROUP_WEBHOOK: ${{ secrets.DISCORD_GROUP_WEBHOOK }}
+        run: node shareNewArticles.js
+        working-directory: scripts

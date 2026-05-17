@@ -32,6 +32,26 @@ export interface ScheduledEvent {
   createdAt: Timestamp
 }
 
+export const ARTICLE_TOPICS = [
+  'Wind Projects',
+  'Water District Updates',
+  'Water Related News',
+] as const
+
+export type ArticleTopic = (typeof ARTICLE_TOPICS)[number]
+
+export interface Article {
+  id: string
+  url: string
+  title: string
+  summary: string
+  source: string
+  topic: ArticleTopic | string
+  publishedAt: Timestamp
+  imageUrl: string | null
+  sentToGroup?: boolean
+}
+
 export interface UserProfile {
   uid: string
   email: string

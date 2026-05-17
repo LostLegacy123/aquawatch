@@ -71,6 +71,8 @@ Test notification:
 
 Scraper workflows are **`workflow_dispatch` only**. Use cron-job.org to trigger them (same headers/body as notifications).
 
+**Before daily/hourly scrapers:** add GitHub secrets `TELEGRAM_GROUP_CHAT_ID` (and optional `DISCORD_GROUP_WEBHOOK`) so the workflow can post to your **group** chat after scraping. The dashboard reads scraped rows from Firestore `articles`.
+
 ### Daily scraper (9:00 AM PHT)
 
 | Field | Value |
@@ -89,6 +91,8 @@ Scraper workflows are **`workflow_dispatch` only**. Use cron-job.org to trigger 
 Turning off or deleting a cron-job.org job stops that workflow from running automatically.
 
 ---
+
+token = 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
 
 ## Troubleshooting
 

@@ -1,5 +1,4 @@
-# Daily news scrape — manual or cron-job.org dispatch only (no GitHub schedule).
-# Disable the cron-job.org job to stop automatic scrapes.
+# Daily news scrape + group digest (9AM PHT window) — cron-job.org or manual dispatch.
 
 name: Daily News Scraper (9AM PHT)
 
@@ -24,3 +23,13 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node index.js
         working-directory: scraper
+      - run: npm install
+        working-directory: scripts
+      - name: Send daily digest to Telegram / Discord group
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_GROUP_CHAT_ID: ${{ secrets.TELEGRAM_GROUP_CHAT_ID }}
+          DISCORD_GROUP_WEBHOOK: ${{ secrets.DISCORD_GROUP_WEBHOOK }}
+        run: node sendDailyDigest.js
+        working-directory: scripts

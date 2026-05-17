@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -17,12 +18,14 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from './firebase'
 import type {
+  Article,
   EventKind,
   NotifyChannel,
   ScheduledEvent,
   UserProfile,
   WaterData,
 } from '../types'
+import { ARTICLE_TOPICS } from '../types'
 
 export const MOCK_WATER_DATA: WaterData[] = [
   {
@@ -80,6 +83,34 @@ export function subscribeWaterData(
     },
   )
 }
+
+export function subscribeArticles(
+  onData: (items: Article[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, 'articles'),
+    orderBy('publishedAt', 'desc'),
+    limit(80),
+  )
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as Article[],
+      )
+    },
+    (err) => {
+      onError?.(err)
+      onData([])
+    },
+  )
+}
+
+export { ARTICLE_TOPICS }
 
 export function subscribeUserProfile(
   uid: string,
