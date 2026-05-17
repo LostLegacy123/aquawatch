@@ -19,15 +19,13 @@ If you only ever see **workflow_dispatch**, GitHub cron is not firing. Check:
 
 Cron uses **UTC**. `*/5 * * * *` = at :00, :05, :10, :15… UTC (8 hours behind Philippine time).
 
-## If schedule still does not run (free backup)
+## If schedule still does not run (recommended backup)
 
-Use [cron-job.org](https://cron-job.org) (free) to call GitHub’s API every 5 minutes and **Run workflow** — no Vercel, no Firebase Blaze.
+Use [cron-job.org](https://cron-job.org) to call GitHub’s API every 5 minutes (same as clicking **Run workflow**).
 
-1. Create a GitHub PAT (classic) with scope **workflow**.
-2. Add cron job: **POST**  
-   `https://api.github.com/repos/LostLegacy123/aquawatch/actions/workflows/check-notifications.yml/dispatches`  
-   Body: `{"ref":"master"}`  
-   Header: `Authorization: Bearer YOUR_PAT`
+**Full step-by-step:** [docs/cron-job-org-setup.md](./cron-job-org-setup.md)
+
+You only need a **GitHub PAT** (`workflow` scope) stored in cron-job.org — **not** a cron-job.org API key.
 
 ## Secrets required
 
