@@ -1,5 +1,7 @@
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
 const admin = require('firebase-admin')
 
 const { scrapeDOE } = require('./sources/doe')
@@ -10,8 +12,21 @@ const { scrapeABSCBN } = require('./sources/abscbn')
 const { scrapeGMA } = require('./sources/gma')
 const { scrapeManilaBulletin } = require('./sources/manilaBulletin')
 const { scrapeInquirer } = require('./sources/inquirer')
+const { scrapeAllRssFeeds } = require('./sources/rssFeeds')
 
-/** Dedupe by canonical URL */
+/** Load .env from repo root when running locally (GitHub Actions uses secrets). */
+function loadDotEnv() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) return
+  const envPath = path.join(__dirname, '..', '.env')
+  if (!fs.existsSync(envPath)) return
+  try {
+    const dotenv = require('dotenv')
+    dotenv.config({ path: envPath })
+  } catch {
+    console.warn('dotenv not installed; set FIREBASE_SERVICE_ACCOUNT in environment')
+  }
+}
+
 function dedupeByUrl(records) {
   const map = new Map()
   for (const r of records) {
@@ -43,30 +58,35 @@ async function writeArticlesToFirestore(db, records) {
     await batch.commit()
     total += slice.length
   }
-  console.log(`Written ${total} articles to Firestore`)
+  console.log(`Written ${total} articles to Firestore collection "articles"`)
+  return total
 }
 
 async function main() {
+  loadDotEnv()
+
   let db = null
   try {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT
-    if (raw) {
-      const serviceAccount = JSON.parse(raw)
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      })
-      db = admin.firestore()
-    } else {
-      console.warn(
-        'FIREBASE_SERVICE_ACCOUNT not set; will skip Firestore write.',
-      )
+    if (!raw) {
+      console.error('FIREBASE_SERVICE_ACCOUNT not set — cannot write to Firestore.')
+      process.exitCode = 1
+      return
     }
+    const serviceAccount = JSON.parse(raw)
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    })
+    db = admin.firestore()
+    console.log(`Firebase project: ${serviceAccount.project_id}`)
   } catch (e) {
-    console.warn('Firebase init failed:', e && e.message)
-    db = null
+    console.error('Firebase init failed:', e && e.message)
+    process.exitCode = 1
+    return
   }
 
-  const parts = await Promise.all([
+  const rssRecords = await scrapeAllRssFeeds()
+  const htmlParts = await Promise.all([
     scrapeDOE(),
     scrapeLWUA(),
     scrapeDENR(),
@@ -77,17 +97,23 @@ async function main() {
     scrapeInquirer(),
   ])
 
-  const records = dedupeByUrl(parts.flat())
-  console.log(`Scraped ${records.length} relevant articles (deduped by url)`)
+  const records = dedupeByUrl([...rssRecords, ...htmlParts.flat()])
+  console.log(`Total relevant articles (RSS + HTML): ${records.length}`)
 
-  if (!db || records.length === 0) {
+  if (records.length === 0) {
+    console.error('No articles scraped — check network or RSS feeds.')
+    process.exitCode = 1
     return
   }
 
   try {
-    await writeArticlesToFirestore(db, records)
+    const written = await writeArticlesToFirestore(db, records)
+    if (written === 0) {
+      process.exitCode = 1
+    }
   } catch (e) {
     console.error('Firestore write failed:', e && e.message)
+    process.exitCode = 1
   }
 }
 

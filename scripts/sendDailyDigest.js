@@ -1,7 +1,14 @@
 'use strict'
 
+const path = require('path')
 const fetch = require('node-fetch')
 const admin = require('firebase-admin')
+
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+} catch {
+  /* optional for local runs */
+}
 
 const TOPICS = [
   'Wind Projects',
@@ -80,10 +87,7 @@ async function sendDiscord(webhookUrl, text) {
   return true
 }
 
-async function runSendDailyDigest() {
-  const db = initFirebase()
-  if (!db) return
-
+async function fetchDigestArticles(db) {
   const { startMs, endMs } = getDigestWindow()
   const startTs = admin.firestore.Timestamp.fromMillis(startMs)
   const endTs = admin.firestore.Timestamp.fromMillis(endMs)
@@ -92,14 +96,38 @@ async function runSendDailyDigest() {
     `Digest window (PHT): ${new Date(startMs).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })} → ${new Date(endMs).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`,
   )
 
-  const snapshot = await db
+  let snapshot = await db
     .collection('articles')
     .where('publishedAt', '>=', startTs)
     .where('publishedAt', '<=', endTs)
     .get()
 
   if (snapshot.empty) {
-    console.log('No articles in digest window')
+    console.log('No articles in 9AM–9AM window; using last 24 hours (manual/test runs)')
+    const fallbackStart = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 24 * 60 * 60 * 1000,
+    )
+    snapshot = await db
+      .collection('articles')
+      .where('publishedAt', '>=', fallbackStart)
+      .get()
+  }
+
+  return { snapshot, endMs }
+}
+
+async function runSendDailyDigest() {
+  const db = initFirebase()
+  if (!db) {
+    process.exitCode = 1
+    return
+  }
+
+  const { snapshot, endMs } = await fetchDigestArticles(db)
+
+  if (snapshot.empty) {
+    console.log('No articles to digest — run scraper first')
+    process.exitCode = 1
     return
   }
 
@@ -133,7 +161,8 @@ async function runSendDailyDigest() {
   }
 
   if (!hasAny) {
-    console.log('No articles matched rubric topics in window')
+    console.log('No articles matched rubric topics')
+    process.exitCode = 1
     return
   }
 
@@ -142,16 +171,31 @@ async function runSendDailyDigest() {
   const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID
   const discordWebhook = process.env.DISCORD_GROUP_WEBHOOK
 
-  if (groupChatId) {
-    await sendTelegram(groupChatId, message, token)
+  let sent = false
+  if (groupChatId && token) {
+    try {
+      sent = (await sendTelegram(groupChatId, message, token)) || sent
+    } catch (err) {
+      console.error('Telegram digest failed:', err.message || err)
+    }
   } else {
-    console.warn('TELEGRAM_GROUP_CHAT_ID not set — skip Telegram digest')
+    console.warn('TELEGRAM_GROUP_CHAT_ID or TELEGRAM_BOT_TOKEN missing')
   }
 
   if (discordWebhook) {
-    await sendDiscord(discordWebhook, message)
+    try {
+      sent = (await sendDiscord(discordWebhook, message)) || sent
+    } catch (err) {
+      console.error('Discord digest failed:', err.message || err)
+    }
   } else {
-    console.warn('DISCORD_GROUP_WEBHOOK not set — skip Discord digest')
+    console.warn('DISCORD_GROUP_WEBHOOK not set')
+  }
+
+  if (!sent) {
+    console.error('Digest not sent — add group secrets to GitHub Actions')
+    process.exitCode = 1
+    return
   }
 
   const batch = db.batch()

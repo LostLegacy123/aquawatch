@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "checkNotifications.js",
   "dependencies": {
+    "dotenv": "^17.4.2",
     "firebase-admin": "^12.0.0",
     "node-fetch": "^2.7.0"
   }
