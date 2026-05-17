@@ -4,10 +4,10 @@
 name: Notification Checker (every 5 min)
 
 on:
-  workflow_dispatch:
+  # workflow_dispatch:
   # Enable automatic runs when Firebase + secrets are ready:
-  # schedule:
-  #   - cron: '*/5 * * * *'
+   schedule:
+     - cron: '*/5 * * * *'
 
 jobs:
   notify:
