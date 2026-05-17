@@ -5,7 +5,8 @@ name: Notification Checker (every 5 min)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'
+    # Offset from :00/:05 to avoid GitHub scheduler drops at the top of each hour
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
 
 jobs:
   notify:
