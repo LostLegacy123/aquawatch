@@ -7,11 +7,12 @@ Real-time water and environmental news for the Philippines, plus personal schedu
 | Web app | React, Vite, TypeScript, Tailwind CSS |
 | Auth & database | Firebase (Google Sign-In, Firestore) |
 | Hosting | Firebase Hosting |
+| Scheduling | [cron-job.org](https://cron-job.org) → GitHub `workflow_dispatch` (free; disable job = stop runs) |
 | Event notifications | GitHub Actions → `scripts/checkNotifications.js` |
 | Telegram bot linking | Vercel → `api/telegram-webhook.js` |
 | News scraping | GitHub Actions → `scraper/` |
 | Marketing page | `railway-landing/` (Railway) |
-| Legacy (optional) | Firebase Cloud Functions in `functions/` |
+| Legacy (optional) | Firebase Cloud Functions in `functions/` (requires Blaze for schedulers) |
 
 **Repository:** https://github.com/LostLegacy123/aquawatch
 
@@ -35,10 +36,16 @@ flowchart TB
     AR["articles"]
   end
 
-  subgraph gha ["GitHub Actions — workflows in repo; schedules OFF by default"]
-    CN["check-notifications — manual only until cron enabled"]
-    SD["scraper-daily — manual only until cron enabled"]
-    SR["scraper-realtime — manual only until cron enabled"]
+  subgraph cronjob ["cron-job.org — external scheduler"]
+    CJ5["every 5 min → notifications"]
+    CJD["daily 9AM PHT → scraper"]
+    CJH["optional hourly → scraper"]
+  end
+
+  subgraph gha ["GitHub Actions — workflow_dispatch only"]
+    CN["check-notifications.yml"]
+    SD["scraper-daily.yml"]
+    SR["scraper-realtime.yml"]
   end
 
   subgraph vercel ["Vercel"]
@@ -46,10 +53,13 @@ flowchart TB
   end
 
   subgraph legacy ["Optional — Firebase Functions"]
-    CF["checkNotifications + sendDailyDigest + telegramWebhook + testDiscordWebhook"]
+    CF["checkNotifications + sendDailyDigest + telegramWebhook"]
   end
 
   client --> firestore
+  CJ5 -->|"POST dispatch API"| CN
+  CJD -->|"POST dispatch API"| SD
+  CJH -.->|"POST dispatch API"| SR
   CN --> EV
   CN --> US
   SD --> AR
@@ -59,7 +69,11 @@ flowchart TB
   CF -.-> AR
 ```
 
-**Solid lines** — primary paths in use today. **Dotted lines** — legacy Functions; avoid running **both** Functions schedulers and GitHub Actions notification workflow, or users may get duplicate messages.
+**How automation works:** cron-job.org calls GitHub’s API on a timer (same as clicking **Run workflow**). Workflows have **no GitHub `schedule`** for scrapers; notifications can use cron-job.org even if GitHub’s built-in schedule does not run on your repo. **Disable a cron-job.org job** to stop that workflow without changing code.
+
+**Solid lines** — primary paths. **Dotted lines** — optional (hourly scraper, legacy Functions). Do not run **both** Firebase scheduled Functions and cron-job.org notifications, or users may get duplicate messages.
+
+Setup: [docs/cron-job-org-setup.md](docs/cron-job-org-setup.md)
 
 ---
 
@@ -104,7 +118,8 @@ aquawatch-ph/
 ├── scraper/                # News scraper + sources/
 ├── api/                    # Vercel Telegram webhook
 ├── railway-landing/        # Static landing page
-└── .github/workflows/      # GHA workflows (manual-only until you enable cron)
+├── docs/                   # cron-job.org setup, automation notes
+└── .github/workflows/      # GHA workflows (workflow_dispatch; triggered by cron-job.org)
 ```
 
 ---
@@ -132,29 +147,32 @@ node checkNotifications.js
 
 ---
 
-## GitHub Actions workflows
+## GitHub Actions & automation
 
-Workflows are **safe to commit and push**: they use **`workflow_dispatch` only** (manual run from the Actions tab). **Cron schedules are commented out** so nothing scrapes or sends notifications automatically until you enable them.
+Workflows use **`workflow_dispatch` only** in YAML (manual button or external trigger). **Automatic runs use [cron-job.org](https://cron-job.org)** posting to GitHub’s workflow dispatch API — see **[docs/cron-job-org-setup.md](docs/cron-job-org-setup.md)**.
 
-| File | Purpose | When enabled (cron) |
-|------|---------|---------------------|
-| `check-notifications.yml` | Event reminders via Telegram/Discord | Every 5 minutes |
-| `scraper-daily.yml` | Scrape news sources → `articles` | Daily 9:00 AM PHT |
-| `scraper-realtime.yml` | Hourly scrape (full run today; `--realtime` TBD) | Every hour |
+| Workflow file | Purpose | Suggested cron-job.org schedule |
+|---------------|---------|--------------------------------|
+| `check-notifications.yml` | Personal reminders (Telegram/Discord) | Every **5 minutes** |
+| `scraper-daily.yml` | Scrape all sources → `articles` | Daily **9:00 AM** Asia/Manila |
+| `scraper-realtime.yml` | Full scrape (hourly check) | Every **hour** (optional) |
 
-### Enable automatic runs
+Turn **off** a cron-job.org job to stop that workflow. Scrapers do not use GitHub’s built-in `schedule` in the repo.
 
-1. Add repository secrets: **Settings → Secrets and variables → Actions**
-   - `FIREBASE_SERVICE_ACCOUNT` — service account JSON as a **single line**
-   - `TELEGRAM_BOT_TOKEN`
-   - `DISCORD_GROUP_WEBHOOK` (optional; digest / unused by notification script today)
-2. In each workflow file, uncomment the `schedule:` block and keep `workflow_dispatch` if you want manual runs too.
-3. Commit and push.
-4. **Disable** Firebase scheduled functions if you use GHA for notifications (avoid duplicates).
+### Repository secrets (Actions)
 
-### Manual test (before enabling cron)
+**Settings → Secrets and variables → Actions**
 
-**Actions →** pick a workflow → **Run workflow**.
+| Secret | Used by |
+|--------|---------|
+| `FIREBASE_SERVICE_ACCOUNT` | Notifications, scrapers |
+| `TELEGRAM_BOT_TOKEN` | Notifications, Telegram webhook |
+| `TELEGRAM_GROUP_CHAT_ID` | Group digest (optional; Functions or future script) |
+| `DISCORD_GROUP_WEBHOOK` | Group digest (optional) |
+
+### Manual test
+
+**Actions →** pick a workflow → **Run workflow** (no cron-job.org needed).
 
 ---
 
