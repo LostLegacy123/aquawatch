@@ -1,7 +1,15 @@
 'use strict'
 
+const path = require('path')
 const fetch = require('node-fetch')
 const admin = require('firebase-admin')
+const { sendTelegramToEnvRecipients } = require('./lib/telegram')
+
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+} catch {
+  /* optional */
+}
 
 const TOPICS = [
   'Wind Projects',
@@ -25,21 +33,6 @@ function initFirebase() {
   } catch (err) {
     console.error('Firebase init failed:', err.message || err)
     return null
-  }
-}
-
-async function sendTelegram(chatId, text, token) {
-  if (!token || !chatId) return
-  const res = await fetch(
-    `https://api.telegram.org/bot${token}/sendMessage`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    },
-  )
-  if (!res.ok) {
-    console.error('sendTelegram:', res.status, await res.text())
   }
 }
 
@@ -77,7 +70,6 @@ async function runShareNewArticles() {
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN
-  const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID
   const discordWebhook = process.env.DISCORD_GROUP_WEBHOOK
 
   let shared = 0
@@ -96,7 +88,9 @@ async function runShareNewArticles() {
       .filter(Boolean)
       .join('\n')
 
-    if (groupChatId) await sendTelegram(groupChatId, text, token)
+    if (token) {
+      await sendTelegramToEnvRecipients(text, token, { includeGroup: true })
+    }
     if (discordWebhook) {
       await sendDiscord(discordWebhook, a.title, a.url, a.source)
     }

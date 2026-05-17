@@ -1,7 +1,14 @@
 'use strict'
 
-const fetch = require('node-fetch')
+const path = require('path')
 const admin = require('firebase-admin')
+const { sendTelegram, normalizeChatId, parseTelegramChatIdsFromEnv } = require('./lib/telegram')
+
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+} catch {
+  /* optional for local runs */
+}
 
 const TRIGGERS = [
   { key: '3d', minDiff: -4320, maxDiff: -4315 },
@@ -30,13 +37,6 @@ function formatDate(date) {
     timeStyle: 'short',
     timeZone: 'Asia/Manila',
   })
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
 }
 
 function buildMessage(eventKind, triggerKey, title, scheduledDate) {
@@ -76,34 +76,16 @@ function activeTriggerKey(diff) {
   return null
 }
 
-async function sendTelegram(chatId, message, token) {
-  if (!token) {
-    console.error('sendTelegram: TELEGRAM_BOT_TOKEN missing')
-    return
-  }
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: escapeHtml(message),
-          parse_mode: 'HTML',
-        }),
-      },
-    )
-    if (!res.ok) {
-      console.error('sendTelegram: HTTP', res.status, await res.text())
-    }
-  } catch (err) {
-    console.error('sendTelegram:', err.message || err)
-  }
+function telegramRecipientsForUser(user) {
+  const ids = new Set(parseTelegramChatIdsFromEnv({ includeGroup: true }))
+  const linked = normalizeChatId(user?.telegramChatId)
+  if (linked) ids.add(linked)
+  return [...ids]
 }
 
 async function sendDiscord(webhookUrl, message, triggerKey) {
-  if (!webhookUrl) return
+  if (!webhookUrl) return false
+  const fetch = require('node-fetch')
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',
@@ -120,9 +102,12 @@ async function sendDiscord(webhookUrl, message, triggerKey) {
     })
     if (!res.ok) {
       console.error('sendDiscord: HTTP', res.status, await res.text())
+      return false
     }
+    return true
   } catch (err) {
     console.error('sendDiscord:', err.message || err)
+    return false
   }
 }
 
@@ -188,14 +173,22 @@ async function main() {
     const channels = ev.notifyVia || []
     let delivered = false
 
-    if (channels.includes('telegram') && user.telegramChatId) {
-      await sendTelegram(user.telegramChatId, message, token)
-      delivered = true
+    if (channels.includes('telegram')) {
+      const chatIds = telegramRecipientsForUser(user)
+      if (!chatIds.length) {
+        console.warn(
+          `Event ${docSnap.id}: Telegram enabled but no chat id (link in Settings or set TELEGRAM_CHAT_IDS)`,
+        )
+      }
+      for (const chatId of chatIds) {
+        if (await sendTelegram(chatId, message, token)) delivered = true
+      }
     }
 
     if (channels.includes('discord') && user.discordWebhookUrl) {
-      await sendDiscord(user.discordWebhookUrl, message, triggerKey)
-      delivered = true
+      if (await sendDiscord(user.discordWebhookUrl, message, triggerKey)) {
+        delivered = true
+      }
     }
 
     if (!delivered) continue

@@ -3,6 +3,7 @@
 const path = require('path')
 const fetch = require('node-fetch')
 const admin = require('firebase-admin')
+const { sendTelegramToEnvRecipients } = require('./lib/telegram')
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
@@ -46,23 +47,6 @@ function initFirebase() {
     console.error('Firebase init failed:', err.message || err)
     return null
   }
-}
-
-async function sendTelegram(chatId, text, token) {
-  if (!token || !chatId) return false
-  const res = await fetch(
-    `https://api.telegram.org/bot${token}/sendMessage`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    },
-  )
-  if (!res.ok) {
-    console.error('sendTelegram:', res.status, await res.text())
-    return false
-  }
-  return true
 }
 
 async function sendDiscord(webhookUrl, text) {
@@ -168,18 +152,22 @@ async function runSendDailyDigest() {
 
   const message = lines.join('\n').trim()
   const token = process.env.TELEGRAM_BOT_TOKEN
-  const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID
   const discordWebhook = process.env.DISCORD_GROUP_WEBHOOK
 
   let sent = false
-  if (groupChatId && token) {
+  if (token) {
     try {
-      sent = (await sendTelegram(groupChatId, message, token)) || sent
+      sent = (await sendTelegramToEnvRecipients(message, token, { includeGroup: true })) || sent
     } catch (err) {
       console.error('Telegram digest failed:', err.message || err)
     }
+    if (!sent) {
+      console.warn(
+        'Telegram digest not sent — set TELEGRAM_GROUP_CHAT_ID and/or TELEGRAM_CHAT_IDS in GitHub Secrets',
+      )
+    }
   } else {
-    console.warn('TELEGRAM_GROUP_CHAT_ID or TELEGRAM_BOT_TOKEN missing')
+    console.warn('TELEGRAM_BOT_TOKEN missing')
   }
 
   if (discordWebhook) {

@@ -27,42 +27,6 @@ import type {
 } from '../types'
 import { ARTICLE_TOPICS } from '../types'
 
-export const MOCK_WATER_DATA: WaterData[] = [
-  {
-    id: 'mock-pagasa-1',
-    source: 'PAGASA',
-    category: 'Water Level',
-    title: 'Angat Dam Water Level',
-    value: '198.42',
-    unit: 'm',
-    location: 'Bulacan',
-    fetchedAt: Timestamp.fromDate(new Date(Date.now() - 45 * 60 * 1000)),
-    rawUrl: 'https://www.pagasa.dost.gov.ph/',
-  },
-  {
-    id: 'mock-pagasa-2',
-    source: 'PAGASA',
-    category: 'Flood Alert',
-    title: 'Marikina River Alert Level',
-    value: '15.2',
-    unit: 'm',
-    location: 'Marikina City',
-    fetchedAt: Timestamp.fromDate(new Date(Date.now() - 120 * 60 * 1000)),
-    rawUrl: 'https://www.pagasa.dost.gov.ph/',
-  },
-  {
-    id: 'mock-doe-1',
-    source: 'DOE',
-    category: 'Fuel Price',
-    title: 'Diesel (Metro Manila)',
-    value: '58.45',
-    unit: 'PHP/L',
-    location: 'NCR',
-    fetchedAt: Timestamp.fromDate(new Date(Date.now() - 30 * 60 * 1000)),
-    rawUrl: 'https://www.doe.gov.ph/',
-  },
-]
-
 export function subscribeWaterData(
   onData: (items: WaterData[]) => void,
   onError?: (error: Error) => void,
@@ -75,11 +39,11 @@ export function subscribeWaterData(
         id: d.id,
         ...d.data(),
       })) as WaterData[]
-      onData(items.length > 0 ? items : MOCK_WATER_DATA)
+      onData(items)
     },
     (err) => {
       onError?.(err)
-      onData(MOCK_WATER_DATA)
+      onData([])
     },
   )
 }
@@ -91,7 +55,7 @@ export function subscribeArticles(
   const q = query(
     collection(db, 'articles'),
     orderBy('publishedAt', 'desc'),
-    limit(80),
+    limit(120),
   )
   return onSnapshot(
     q,
