@@ -3,7 +3,7 @@
 const path = require('path')
 const fetch = require('node-fetch')
 const admin = require('firebase-admin')
-const { sendTelegramToEnvRecipients } = require('./lib/telegram')
+const { sendTelegramBroadcast } = require('./lib/telegramBroadcast')
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
@@ -89,7 +89,7 @@ async function runShareNewArticles() {
       .join('\n')
 
     if (token) {
-      await sendTelegramToEnvRecipients(text, token, { includeGroup: true })
+      await sendTelegramBroadcast(db, text, token)
     }
     if (discordWebhook) {
       await sendDiscord(discordWebhook, a.title, a.url, a.source)

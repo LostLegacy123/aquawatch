@@ -14,10 +14,11 @@ async function main() {
   }
 
   console.log('Fetching chats from getUpdates…')
-  console.log('If the list is empty:')
-  console.log('  1. Add @aquawatchph_bot to your Telegram group')
-  console.log('  2. Send any message in that group (e.g. "test")')
-  console.log('  3. Run this script again')
+  console.log('If the list is empty (webhook blocks getUpdates):')
+  console.log('  1. In your GROUP, send any message')
+  console.log('  2. Long-press that message → Forward → send to @userinfobot or @RawDataBot in a PRIVATE chat')
+  console.log('     (you do NOT add those bots to the group)')
+  console.log('  3. They reply with the real group chat id (starts with -100)')
   console.log('')
 
   const chats = await listRecentTelegramChats(token)

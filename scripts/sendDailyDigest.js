@@ -3,7 +3,7 @@
 const path = require('path')
 const fetch = require('node-fetch')
 const admin = require('firebase-admin')
-const { sendTelegramToEnvRecipients } = require('./lib/telegram')
+const { sendTelegramBroadcast } = require('./lib/telegramBroadcast')
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
@@ -157,13 +157,13 @@ async function runSendDailyDigest() {
   let sent = false
   if (token) {
     try {
-      sent = (await sendTelegramToEnvRecipients(message, token, { includeGroup: true })) || sent
+      sent = (await sendTelegramBroadcast(db, message, token)) || sent
     } catch (err) {
       console.error('Telegram digest failed:', err.message || err)
     }
     if (!sent) {
       console.warn(
-        'Telegram digest not sent — set TELEGRAM_GROUP_CHAT_ID and/or TELEGRAM_CHAT_IDS in GitHub Secrets',
+        'Telegram digest not sent — link Telegram in Settings and/or fix TELEGRAM_GROUP_CHAT_ID in GitHub Secrets',
       )
     }
   } else {
