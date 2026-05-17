@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "checkNotifications.js",
   "scripts": {
-    "test-telegram": "node testTelegram.js"
+    "test-telegram": "node testTelegram.js",
+    "list-telegram-chats": "node listTelegramChats.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

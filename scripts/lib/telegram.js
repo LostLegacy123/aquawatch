@@ -190,13 +190,13 @@ async function sendTelegramToEnvRecipients(text, token, options) {
   return any
 }
 
-function getMeHttps(token) {
+function telegramGetHttps(token, path, method = 'GET') {
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
         hostname: 'api.telegram.org',
-        path: `/bot${token}/getMe`,
-        method: 'GET',
+        path: `/bot${token}/${path}`,
+        method,
         timeout: REQUEST_TIMEOUT_MS,
         family: 4,
       },
@@ -223,6 +223,51 @@ function getMeHttps(token) {
   })
 }
 
+function getMeHttps(token) {
+  return telegramGetHttps(token, 'getMe')
+}
+
+/** List recent chats the bot has seen (requires a message in that chat after bot was added). */
+async function listRecentTelegramChats(token) {
+  let data
+  try {
+    const fetch = getFetch()
+    const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50`)
+    data = await res.json()
+  } catch {
+    data = await telegramGetHttps(token, 'getUpdates?limit=50')
+  }
+  if (!data.ok) {
+    console.error('getUpdates failed:', data)
+    return []
+  }
+  const chats = new Map()
+  for (const update of data.result || []) {
+    const msg = update.message || update.channel_post || update.my_chat_member?.chat
+    const chat = msg?.chat || update.my_chat_member?.chat
+    if (!chat?.id) continue
+    chats.set(String(chat.id), {
+      id: String(chat.id),
+      type: chat.type,
+      title: chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '(no name)',
+    })
+  }
+  return [...chats.values()]
+}
+
+async function validateChatId(token, chatId) {
+  const id = normalizeChatId(chatId)
+  if (!id) return { ok: false, error: 'invalid id' }
+  let data
+  try {
+    data = await telegramGetHttps(token, `getChat?chat_id=${encodeURIComponent(id)}`)
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
+  if (!data.ok) return { ok: false, error: data.description || JSON.stringify(data) }
+  return { ok: true, chat: data.result }
+}
+
 /** Quick connectivity test (getMe + optional send). */
 async function testTelegramConnection(token, chatId) {
   let me
@@ -239,6 +284,17 @@ async function testTelegramConnection(token, chatId) {
   }
   console.log(`Bot: @${me.result.username}`)
   if (!chatId) return true
+
+  const check = await validateChatId(token, chatId)
+  if (!check.ok) {
+    console.error(`getChat failed for ${normalizeChatId(chatId)}:`, check.error)
+    console.error(
+      'This id is wrong for this bot, or the bot is not in that group. Run: npm run list-telegram-chats',
+    )
+    return false
+  }
+  console.log(`Chat OK: ${check.chat.type} — ${check.chat.title || check.chat.username || chatId}`)
+
   return sendTelegram(chatId, 'AquaWatch PH — Telegram test OK', token)
 }
 
@@ -249,4 +305,6 @@ module.exports = {
   parseTelegramChatIdsFromEnv,
   chunkText,
   testTelegramConnection,
+  listRecentTelegramChats,
+  validateChatId,
 }
