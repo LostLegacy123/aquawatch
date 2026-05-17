@@ -2,6 +2,9 @@
   "name": "aquawatch-scripts",
   "version": "1.0.0",
   "main": "checkNotifications.js",
+  "scripts": {
+    "test-telegram": "node testTelegram.js"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "firebase-admin": "^12.0.0",

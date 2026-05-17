@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ChevronLeft, ChevronRight, ExternalLink, Newspaper } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import { useArticles } from '../hooks/useArticles'
@@ -25,6 +25,16 @@ function normalizeTopic(topic: string): string {
   return ARTICLE_TOPICS.includes(topic as (typeof ARTICLE_TOPICS)[number])
     ? topic
     : 'Water Related News'
+}
+
+function dedupeArticles(articles: Article[]): Article[] {
+  const seen = new Set<string>()
+  return articles.filter((a) => {
+    const key = (a.url || a.id).trim().toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function groupBySourceThenTopic(articles: Article[]): Map<string, Map<string, Article[]>> {
@@ -111,28 +121,93 @@ function Pagination({
   totalPages: number
   onPage: (p: number) => void
 }) {
+  const [jumpInput, setJumpInput] = useState(String(page))
+
+  useEffect(() => {
+    setJumpInput(String(page))
+  }, [page])
+
   if (totalPages <= 1) return null
+
+  const goToPage = (raw: string) => {
+    const n = parseInt(raw, 10)
+    if (Number.isNaN(n)) return
+    const clamped = Math.min(totalPages, Math.max(1, n))
+    onPage(clamped)
+    setJumpInput(String(clamped))
+  }
+
+  const onJumpSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    goToPage(jumpInput)
+  }
+
   return (
-    <nav className="mt-8 flex flex-wrap items-center justify-center gap-3">
-      <button
-        type="button"
-        onClick={() => onPage(page - 1)}
-        disabled={page <= 1}
-        className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+    <nav className="mt-8 flex flex-col items-center gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={() => onPage(1)}
+          disabled={page <= 1}
+          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+        >
+          First
+        </button>
+        <button
+          type="button"
+          onClick={() => onPage(page - 1)}
+          disabled={page <= 1}
+          className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+        >
+          <ChevronLeft size={16} /> Prev
+        </button>
+        <span className="min-w-[7rem] text-center text-sm text-slate-300">
+          Page <strong className="text-white">{page}</strong> of{' '}
+          <strong className="text-white">{totalPages}</strong>
+        </span>
+        <button
+          type="button"
+          onClick={() => onPage(page + 1)}
+          disabled={page >= totalPages}
+          className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+        >
+          Next <ChevronRight size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onPage(totalPages)}
+          disabled={page >= totalPages}
+          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+        >
+          Last
+        </button>
+      </div>
+
+      <form
+        onSubmit={onJumpSubmit}
+        className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-400"
       >
-        <ChevronLeft size={16} /> Previous
-      </button>
-      <span className="text-sm text-slate-400">
-        Page {page} of {totalPages}
-      </span>
-      <button
-        type="button"
-        onClick={() => onPage(page + 1)}
-        disabled={page >= totalPages}
-        className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
-      >
-        Next <ChevronRight size={16} />
-      </button>
+        <label htmlFor="jump-page" className="sr-only">
+          Jump to page
+        </label>
+        <span>Go to page</span>
+        <input
+          id="jump-page"
+          type="number"
+          min={1}
+          max={totalPages}
+          value={jumpInput}
+          onChange={(e) => setJumpInput(e.target.value)}
+          className="w-16 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-center text-white"
+        />
+        <button
+          type="submit"
+          className="rounded-lg border border-cyan/40 bg-cyan/10 px-3 py-1.5 text-cyan"
+          style={{ color: '#00d4ff' }}
+        >
+          Go
+        </button>
+      </form>
     </nav>
   )
 }
@@ -143,7 +218,8 @@ export function Dashboard() {
   const { articles, loading: articlesLoading } = useArticles(onNewArticles)
   const [page, setPage] = useState(1)
 
-  const totalPages = Math.max(1, Math.ceil(articles.length / ARTICLES_PER_PAGE))
+  const uniqueArticles = useMemo(() => dedupeArticles(articles), [articles])
+  const totalPages = Math.max(1, Math.ceil(uniqueArticles.length / ARTICLES_PER_PAGE))
   const safePage = Math.min(page, totalPages)
 
   useEffect(() => {
@@ -152,12 +228,12 @@ export function Dashboard() {
 
   useEffect(() => {
     setPage(1)
-  }, [articles.length])
+  }, [uniqueArticles.length])
 
   const pageArticles = useMemo(() => {
     const start = (safePage - 1) * ARTICLES_PER_PAGE
-    return articles.slice(start, start + ARTICLES_PER_PAGE)
-  }, [articles, safePage])
+    return uniqueArticles.slice(start, start + ARTICLES_PER_PAGE)
+  }, [uniqueArticles, safePage])
 
   const grouped = useMemo(() => groupBySourceThenTopic(pageArticles), [pageArticles])
   const sources = useMemo(() => sortedSources(grouped), [grouped])
@@ -174,10 +250,10 @@ export function Dashboard() {
             <Newspaper className="text-cyan" style={{ color: '#00d4ff' }} size={22} />
             <h2 className="text-xl font-bold text-white">News &amp; articles</h2>
           </div>
-          {!articlesLoading && articles.length > 0 ? (
+          {!articlesLoading && uniqueArticles.length > 0 ? (
             <p className="text-sm text-slate-500">
-              {articles.length} article{articles.length === 1 ? '' : 's'}
-              {totalPages > 1 ? ` · ${pageArticles.length} on this page` : ''}
+              {uniqueArticles.length} article{uniqueArticles.length === 1 ? '' : 's'} ·{' '}
+              {totalPages} page{totalPages === 1 ? '' : 's'} · up to {ARTICLES_PER_PAGE} per page
             </p>
           ) : null}
         </div>
@@ -188,7 +264,7 @@ export function Dashboard() {
               <Skeleton key={n} className="h-44" />
             ))}
           </div>
-        ) : articles.length === 0 ? (
+        ) : uniqueArticles.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 py-12 text-center">
             <Newspaper className="mx-auto mb-3 text-slate-600" size={48} />
             <p className="text-slate-400">No articles yet</p>

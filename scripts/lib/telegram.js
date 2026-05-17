@@ -1,30 +1,88 @@
 'use strict'
 
-const fetch = require('node-fetch')
+const https = require('https')
 
 const MAX_MESSAGE_LENGTH = 4096
+const REQUEST_TIMEOUT_MS = 30000
+
+function getFetch() {
+  if (typeof globalThis.fetch === 'function') return globalThis.fetch.bind(globalThis)
+  return require('node-fetch')
+}
+
+function postTelegramHttps(token, body) {
+  const data = JSON.stringify(body)
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.telegram.org',
+        path: `/bot${token}/sendMessage`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
+        timeout: REQUEST_TIMEOUT_MS,
+        family: 4,
+      },
+      (res) => {
+        let text = ''
+        res.on('data', (chunk) => {
+          text += chunk
+        })
+        res.on('end', () => {
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            text,
+          })
+        })
+      },
+    )
+    req.on('error', reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('Telegram request timed out'))
+    })
+    req.write(data)
+    req.end()
+  })
+}
 
 /** Normalize chat id (string; keep negative group ids). */
 function normalizeChatId(chatId) {
   if (chatId == null || chatId === '') return null
-  const s = String(chatId).trim()
+  let s = String(chatId).trim()
+  if (!s) return null
+  if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1).trim()
   if (!s) return null
   if (/^-?\d+$/.test(s)) return s
   return s
 }
 
-/** Comma-separated TELEGRAM_CHAT_IDS; optionally TELEGRAM_GROUP_CHAT_ID. */
-function parseTelegramChatIdsFromEnv({ includeGroup = false } = {}) {
-  const ids = new Set()
-  if (includeGroup) {
-    const group = normalizeChatId(process.env.TELEGRAM_GROUP_CHAT_ID)
-    if (group) ids.add(group)
-  }
-  const list = process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_NOTIFY_CHAT_IDS || ''
-  for (const part of list.split(',')) {
+function addIdFromEnvVar(ids, value) {
+  if (!value) return
+  const raw = String(value).trim()
+  if (!raw) return
+  for (const part of raw.split(/[,;\s]+/)) {
     const id = normalizeChatId(part)
     if (id) ids.add(id)
   }
+}
+
+/**
+ * All Telegram destinations from env.
+ * Supports: TELEGRAM_GROUP_CHAT_ID, TELEGRAM_CHAT_ID, TELEGRAM_CHAT_IDS, TELEGRAM_NOTIFY_CHAT_IDS, TELEGRAM_USER_ID
+ */
+function parseTelegramChatIdsFromEnv({ includeGroup = false } = {}) {
+  const ids = new Set()
+  if (includeGroup) {
+    addIdFromEnvVar(ids, process.env.TELEGRAM_GROUP_CHAT_ID)
+  }
+  addIdFromEnvVar(ids, process.env.TELEGRAM_CHAT_ID)
+  addIdFromEnvVar(ids, process.env.TELEGRAM_USER_ID)
+  addIdFromEnvVar(ids, process.env.TELEGRAM_CHAT_IDS)
+  addIdFromEnvVar(ids, process.env.TELEGRAM_NOTIFY_CHAT_IDS)
   return [...ids]
 }
 
@@ -41,6 +99,32 @@ function chunkText(text, maxLen = MAX_MESSAGE_LENGTH) {
   return chunks.length ? chunks : ['']
 }
 
+async function postTelegram(token, body) {
+  try {
+    const fetch = getFetch()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        },
+      )
+      const text = await res.text()
+      return { ok: res.ok, status: res.status, text }
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch (err) {
+    console.warn('postTelegram fetch failed, using https fallback:', err.message || err)
+    return postTelegramHttps(token, body)
+  }
+}
+
 /**
  * Send plain-text message(s). Returns true if all chunks succeeded.
  */
@@ -53,40 +137,109 @@ async function sendTelegram(chatId, text, token) {
   const chunks = chunkText(text)
   let ok = true
   for (const chunk of chunks) {
+    const body = {
+      chat_id: id,
+      text: chunk,
+      disable_web_page_preview: true,
+    }
+    let result
     try {
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/sendMessage`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: id,
-            text: chunk,
-            disable_web_page_preview: true,
-          }),
-        },
-      )
-      if (!res.ok) {
-        console.error('sendTelegram:', id, res.status, await res.text())
-        ok = false
-      }
+      result = await postTelegram(token, body)
     } catch (err) {
       console.error('sendTelegram:', id, err.message || err)
       ok = false
+      continue
+    }
+    if (!result.ok) {
+      console.error('sendTelegram:', id, result.status, result.text)
+      if (result.text && result.text.includes('chat not found')) {
+        console.error(
+          'Hint: Add the bot to the group, send any message there, then set TELEGRAM_GROUP_CHAT_ID to that chat id (usually starts with -100).',
+        )
+      }
+      if (result.status >= 500) {
+        try {
+          result = await postTelegram(token, body)
+          if (result.ok) continue
+          console.error('sendTelegram retry:', id, result.status, result.text)
+        } catch (err) {
+          console.error('sendTelegram retry:', id, err.message || err)
+        }
+      }
+      ok = false
     }
   }
+  if (ok) console.log(`sendTelegram: delivered to ${id}`)
   return ok
 }
 
-/** Send to every id from env (group + TELEGRAM_CHAT_IDS when includeGroup). */
+/** Send to every id from env (group + personal ids when includeGroup). */
 async function sendTelegramToEnvRecipients(text, token, options) {
   const ids = parseTelegramChatIdsFromEnv(options)
-  if (!ids.length) return false
+  if (!ids.length) {
+    console.error(
+      'sendTelegramToEnvRecipients: no chat ids — set TELEGRAM_GROUP_CHAT_ID and/or TELEGRAM_CHAT_ID in env',
+    )
+    return false
+  }
+  console.log(`sendTelegramToEnvRecipients: sending to ${ids.length} chat(s)`)
   let any = false
   for (const id of ids) {
     if (await sendTelegram(id, text, token)) any = true
   }
   return any
+}
+
+function getMeHttps(token) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.telegram.org',
+        path: `/bot${token}/getMe`,
+        method: 'GET',
+        timeout: REQUEST_TIMEOUT_MS,
+        family: 4,
+      },
+      (res) => {
+        let text = ''
+        res.on('data', (chunk) => {
+          text += chunk
+        })
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(text))
+          } catch (e) {
+            reject(e)
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('getMe timed out'))
+    })
+    req.end()
+  })
+}
+
+/** Quick connectivity test (getMe + optional send). */
+async function testTelegramConnection(token, chatId) {
+  let me
+  try {
+    const fetch = getFetch()
+    const meRes = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+    me = await meRes.json()
+  } catch {
+    me = await getMeHttps(token)
+  }
+  if (!me.ok) {
+    console.error('getMe failed:', me)
+    return false
+  }
+  console.log(`Bot: @${me.result.username}`)
+  if (!chatId) return true
+  return sendTelegram(chatId, 'AquaWatch PH — Telegram test OK', token)
 }
 
 module.exports = {
@@ -95,4 +248,5 @@ module.exports = {
   normalizeChatId,
   parseTelegramChatIdsFromEnv,
   chunkText,
+  testTelegramConnection,
 }
