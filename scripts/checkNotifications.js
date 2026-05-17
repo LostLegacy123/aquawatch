@@ -28,6 +28,7 @@ function formatDate(date) {
   return date.toLocaleString('en-PH', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: 'Asia/Manila',
   })
 }
 
