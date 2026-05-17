@@ -1,13 +1,11 @@
-# Schedules are DISABLED until you enable them (see README.md).
-# Safe to commit and push: this workflow only runs when triggered manually from GitHub Actions.
+# Runs every 5 minutes (cron) and can still be triggered manually.
 
 name: Notification Checker (every 5 min)
 
 on:
   workflow_dispatch:
-  # Enable automatic runs when Firebase + secrets are ready:
-   schedule:
-     - cron: '*/5 * * * *'
+  schedule:
+    - cron: '*/5 * * * *'
 
 jobs:
   notify:
