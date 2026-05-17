@@ -1,0 +1,10 @@
+{
+  "name": "aquawatch-ph-landing",
+  "private": true,
+  "scripts": {
+    "start": "serve . -l tcp://0.0.0.0:${PORT:-8080}"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}
