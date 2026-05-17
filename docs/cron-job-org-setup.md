@@ -67,17 +67,26 @@ Test notification:
 
 ---
 
-## Later — daily scraper (optional second job)
+## Scraper cron jobs (no GitHub schedule — disable job = no scrape)
 
-When you enable news scraping, add a **second** cron job:
+Scraper workflows are **`workflow_dispatch` only**. Use cron-job.org to trigger them (same headers/body as notifications).
+
+### Daily scraper (9:00 AM PHT)
 
 | Field | Value |
 |--------|--------|
 | URL | `https://api.github.com/repos/LostLegacy123/aquawatch/actions/workflows/scraper-daily.yml/dispatches` |
-| Schedule | Once daily at **9:00 AM** (Philippines) — in cron-job.org set timezone **Asia/Manila** if available, or **1:00 AM UTC** |
-| Method / headers / body | Same as notifications job |
+| Schedule | Once daily at **9:00 AM**, timezone **Asia/Manila** |
+| Method / headers / body | POST, same as notifications (`{"ref":"master"}`) |
 
-Hourly scraper: third job only if you need near real-time news (uses more GitHub Actions minutes).
+### Hourly scraper (optional)
+
+| Field | Value |
+|--------|--------|
+| URL | `https://api.github.com/repos/LostLegacy123/aquawatch/actions/workflows/scraper-realtime.yml/dispatches` |
+| Schedule | Every **1 hour** (uses more GitHub Actions minutes) |
+
+Turning off or deleting a cron-job.org job stops that workflow from running automatically.
 
 ---
 

@@ -1,25 +1,26 @@
-# Schedules are DISABLED until you enable them (see README.md).
-# Safe to commit and push: this workflow only runs when triggered manually from GitHub Actions.
-# Note: scraper/index.js does not implement --realtime yet; manual runs perform a full scrape.
+# Hourly news scrape — manual or cron-job.org dispatch only (no GitHub schedule).
+# Disable the cron-job.org job to stop automatic scrapes.
 
 name: Hourly News Check (Near Real-time)
 
 on:
   workflow_dispatch:
-  # Enable automatic hourly runs when ready:
-  # schedule:
-  #   - cron: '0 * * * *'
+
+permissions:
+  contents: read
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: cd scraper && npm install
-      - name: Check for new articles
+      - run: npm install
+        working-directory: scraper
+      - name: Scrape all sources
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node scraper/index.js --realtime
+        run: node index.js
+        working-directory: scraper
