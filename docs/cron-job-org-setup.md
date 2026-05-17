@@ -92,8 +92,6 @@ Turning off or deleting a cron-job.org job stops that workflow from running auto
 
 ---
 
-token = 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
-
 ## Troubleshooting
 
 | Problem | Fix |
