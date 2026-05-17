@@ -1,19 +1,21 @@
-# Runs every 5 minutes (cron) and can still be triggered manually.
+# Personal schedule reminders — runs every 5 minutes (UTC) + manual trigger.
 
 name: Notification Checker (every 5 min)
 
 on:
   workflow_dispatch:
   schedule:
-    # Offset from :00/:05 to avoid GitHub scheduler drops at the top of each hour
-    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: read
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: cd scripts && npm install
@@ -21,4 +23,5 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: node scripts/checkNotifications.js
+        run: node checkNotifications.js
+        working-directory: scripts

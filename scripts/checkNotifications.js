@@ -186,14 +186,19 @@ async function main() {
     if (!user) continue
 
     const channels = ev.notifyVia || []
+    let delivered = false
 
     if (channels.includes('telegram') && user.telegramChatId) {
       await sendTelegram(user.telegramChatId, message, token)
+      delivered = true
     }
 
     if (channels.includes('discord') && user.discordWebhookUrl) {
       await sendDiscord(user.discordWebhookUrl, message, triggerKey)
+      delivered = true
     }
+
+    if (!delivered) continue
 
     try {
       await docSnap.ref.update({
