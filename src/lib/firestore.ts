@@ -54,7 +54,7 @@ export function subscribeArticles(
 ): Unsubscribe {
   const q = query(
     collection(db, 'articles'),
-    orderBy('publishedAt', 'desc'),
+    orderBy('scrapedAt', 'desc'),
     limit(120),
   )
   return onSnapshot(

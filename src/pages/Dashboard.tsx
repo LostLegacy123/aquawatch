@@ -7,7 +7,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ARTICLE_TOPICS } from '../types'
 import type { Article } from '../types'
 
-const ARTICLES_PER_PAGE = 12
+const ARTICLES_PER_PAGE = 30
 
 function formatTimeAgo(ts: Timestamp | null | undefined): string {
   if (!ts) return 'Unknown'
